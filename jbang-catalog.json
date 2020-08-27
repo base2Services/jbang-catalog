@@ -1,0 +1,9 @@
+  
+{
+  "aliases": {
+    "env": {
+      "script-ref": "env.java",
+      "description": "Dump table of Environment Variables"
+    }  
+  }
+}

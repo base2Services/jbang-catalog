@@ -4,6 +4,10 @@
     "env": {
       "script-ref": "env.java",
       "description": "Dump table of Environment Variables"
+    },  
+    "awsssm": {
+      "script-ref": "awsssm.java",
+      "description": "AWS SSM Session Manager Tunnels"
     }  
   }
 }

@@ -121,6 +121,7 @@ class Rdp implements Callable<Integer> {
     copyPasswordToClipboard(instance.instanceId());
 
     final var session = AwsHelper.startSSMSession(instance.instanceId(), localPort);
+    out.printf("Waiting for RDP ssm session on %s\n", instance.instanceId());
     Thread.sleep(10000);
     openRDP();
 
@@ -213,8 +214,24 @@ class AwsHelper {
 
   public static Process startSSMSession(final String instanceId, int localPort) throws Exception {
     final var params = "{\"portNumber\":[\"3389\"], \"localPortNumber\":[\"" + localPort + "\"]}";
+    var args = new ArrayList<String>();
+    args.add("aws");
+    args.add("ssm");
+    args.add("start-session");
+    args.add("--document-name=AWS-StartPortForwardingSession");
+    args.add("--target=" + instanceId);
+    args.add("--parameters=" + params);
+    if(System.getProperty("aws.region") != null) {
+      args.add("--region");
+      args.add(System.getProperty("aws.region"));
+    }
+    if(System.getProperty("aws.profile") != null) {
+      args.add("--profile");
+      args.add(System.getProperty("aws.profile"));
+    }
+
     final var process = new ProcessBuilder()
-      .command("aws", "ssm", "start-session", "--document-name=AWS-StartPortForwardingSession", "--target=" + instanceId, "--parameters=" + params)
+      .command(args)
       .start();
     final var streamGobbler = new StreamGobbler(process.getInputStream(), out::println);
     Executors.newSingleThreadExecutor().submit(streamGobbler);

@@ -1,6 +1,6 @@
 //usr/bin/env jbang "$0" "$@" ; exit $?
 //JAVA 11+
-//DEPS info.picocli:picocli:4.2.0
+//DEPS info.picocli:picocli:4.5.2
 //DEPS org.jline:jline:3.16.0
 //DEPS software.amazon.awssdk:ec2:2.14.5
 //DEPS software.amazon.awssdk:ssm:2.14.5
@@ -27,8 +27,12 @@ import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
+import picocli.CommandLine.ScopeType;
 import picocli.CommandLine.Spec;
+import picocli.CommandLine.IExecutionExceptionHandler;
+import picocli.CommandLine.ParseResult;
 import picocli.CommandLine.Model.CommandSpec;
+
 
 import org.bouncycastle.util.encoders.Base64;
 
@@ -58,8 +62,19 @@ public class awsssm implements Callable<Integer> {
     final int exitCode = new CommandLine(new awsssm())
       .addSubcommand("list", new ListInstances())
       .addSubcommand("rdp", new Rdp())
+      .setExecutionExceptionHandler(new PrintExceptionMessageHandler())
       .execute(args);
     exit(exitCode);
+  }
+
+  @Option(names = "--profile", description = "AWS Credential Profile to use", scope = CommandLine.ScopeType.INHERIT)
+  public void setAwsProfile(String profile) {
+    System.setProperty("aws.profile", profile);
+  }
+
+  @Option(names = "--region", description = "AWS Region", scope = CommandLine.ScopeType.INHERIT)
+  public void setAwsRegion(String region) {
+    System.setProperty("aws.region", region);
   }
 
   @Spec
@@ -67,7 +82,7 @@ public class awsssm implements Callable<Integer> {
 
   @Override
   public Integer call() throws Exception {
-    out.println("here");
+    spec.commandLine().usage(out);
     return 0;
   }
 }
@@ -133,6 +148,10 @@ class Rdp implements Callable<Integer> {
 class AwsHelper {
 
   public static List<Map<String, Instance>> findRunningInstances() {
+    return findRunningInstances(null);
+  }
+
+  public static List<Map<String, Instance>> findRunningInstances(String profile) {
     final var ec2 = Ec2Client.create();
     final var response = ec2.describeInstances(
       DescribeInstancesRequest.builder()
@@ -216,5 +235,24 @@ class StreamGobbler implements Runnable {
   public void run() {
       new BufferedReader(new InputStreamReader(inputStream)).lines()
         .forEach(consumer);
+  }
+}
+
+class PrintExceptionMessageHandler implements IExecutionExceptionHandler {
+  public int handleExecutionException(Exception ex,
+                                      CommandLine cmd,
+                                      ParseResult parseResult) {
+
+      // bold red error message
+      if(ex.getMessage().contains("Unable to load region from any of the provider")) {
+        cmd.getErr().println(cmd.getColorScheme().errorText("Unable to load AWS region from any of the providers\nRegion must be specified either via --region option or environment variable (AWS_REGION)"));
+        cmd.usage(out);
+      } else {
+        cmd.getErr().println(cmd.getColorScheme().errorText(ex.getMessage()));
+      }
+
+      return cmd.getExitCodeExceptionMapper() != null
+                  ? cmd.getExitCodeExceptionMapper().getExitCode(ex)
+                  : cmd.getCommandSpec().exitCodeOnExecutionException();
   }
 }
